@@ -8,7 +8,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.autograd import Function
 
-from op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
+from .op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
 
 
 class PixelNorm(nn.Module):
@@ -154,7 +154,9 @@ class EqualLinear(nn.Module):
             out = fused_leaky_relu(out, self.bias * self.lr_mul)
 
         else:
-            out = F.linear(input, self.weight * self.scale, bias=self.bias * self.lr_mul)
+            out = F.linear(
+                input, self.weight * self.scale, bias=self.bias * self.lr_mul
+            )
 
         return out
 
@@ -370,6 +372,7 @@ class Generator(nn.Module):
         channel_multiplier=2,
         blur_kernel=[1, 3, 3, 1],
         lr_mlp=0.01,
+        style_in_dim=None,
     ):
         super().__init__()
 
@@ -379,10 +382,16 @@ class Generator(nn.Module):
 
         layers = [PixelNorm()]
 
+        if style_in_dim is None:
+            style_in_dim = style_dim
+
         for i in range(n_mlp):
             layers.append(
                 EqualLinear(
-                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
+                    style_in_dim if i == 0 else style_dim,
+                    style_dim,
+                    lr_mul=lr_mlp,
+                    activation='fused_lrelu',
                 )
             )
 
@@ -493,7 +502,7 @@ class Generator(nn.Module):
 
             if styles[0].ndim < 3:
                 latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-                
+
             else:
                 latent = styles[0]
 
